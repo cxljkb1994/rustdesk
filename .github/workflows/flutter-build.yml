@@ -166,7 +166,16 @@ jobs:
         run: |
           # Windows: build RustDesk
           python3 .\build.py --portable --hwcodec --flutter --vram --skip-portable-pack
-          mv ./flutter/build/windows/x64/runner/Release ./rustdesk
+          # Check if the Flutter build output exists and move it
+          if (Test-Path "./flutter/build/windows/x64/runner/Release") {
+            mv ./flutter/build/windows/x64/runner/Release ./rustdesk
+          } elseif (Test-Path "./flutter/build/windows/runner/Release") {
+            mv ./flutter/build/windows/runner/Release ./rustdesk
+          } else {
+            Write-Error "Flutter build output directory not found. Checking available directories..."
+            Get-ChildItem -Path "./flutter/build" -Recurse -Directory | Where-Object { $_.Name -eq "Release" } | ForEach-Object { Write-Host "Found Release directory at: $($_.FullName)" }
+            exit 1
+          }
 
           # Download usbmmidd_v2.zip and extract it to ./rustdesk
           Invoke-WebRequest -Uri https://github.com/rustdesk-org/rdev/releases/download/usbmmidd_v2/usbmmidd_v2.zip -OutFile usbmmidd_v2.zip
@@ -208,6 +217,13 @@ jobs:
         continue-on-error: true
         shell: bash
         run: |
+          # First check if rustdesk directory exists
+          if [ ! -d "./rustdesk" ]; then
+            echo "rustdesk directory not found, checking flutter build output..."
+            find ./flutter/build -type d -name "Release" 2>/dev/null || echo "No Release directories found"
+            exit 1
+          fi
+          
           runner_res=$(find . -name "Runner.res");
           if [ "$runner_res" == "" ]; then
             echo "Runner.res: not found";
@@ -243,6 +259,17 @@ jobs:
         shell: bash
         if: env.UPLOAD_ARTIFACT == 'true'
         run: |
+          # Check if rustdesk directory and exe file exist
+          if [ ! -d "./rustdesk" ]; then
+            echo "Error: rustdesk directory not found"
+            exit 1
+          fi
+          if [ ! -f "./rustdesk/rustdesk.exe" ]; then
+            echo "Error: rustdesk.exe not found in rustdesk directory"
+            ls -la ./rustdesk/
+            exit 1
+          fi
+          
           sed -i '/dpiAware/d' res/manifest.xml
           pushd ./libs/portable
           pip3 install -r requirements.txt

@@ -440,14 +440,44 @@ def build_flutter_windows(version, features, skip_portable_pack):
     os.chdir('flutter')
     system2('flutter build windows --release')
     os.chdir('..')
-    shutil.copy2('target/release/deps/dylib_virtual_display.dll',
-                 flutter_build_dir_2)
+    
+    # Check for different possible Flutter build output directories
+    possible_paths = [
+        'flutter/build/windows/x64/runner/Release',
+        'flutter/build/windows/runner/Release',
+        'flutter/build/windows/Release'
+    ]
+    
+    flutter_output_dir = None
+    for path in possible_paths:
+        if os.path.exists(path):
+            flutter_output_dir = path
+            break
+    
+    if not flutter_output_dir:
+        print("Error: Flutter build output directory not found!")
+        print("Checking available directories in flutter/build:")
+        if os.path.exists('flutter/build'):
+            for root, dirs, files in os.walk('flutter/build'):
+                if 'Release' in dirs:
+                    print(f"Found Release directory at: {os.path.join(root, 'Release')}")
+        exit(-1)
+    
+    print(f"Using Flutter build output from: {flutter_output_dir}")
+    
+    # Copy the dylib to the correct output directory
+    if not os.path.exists(flutter_output_dir):
+        print(f"Error: Flutter output directory {flutter_output_dir} does not exist")
+        exit(-1)
+        
+    shutil.copy2('target/release/deps/dylib_virtual_display.dll', flutter_output_dir)
+    
     if skip_portable_pack:
         return
     os.chdir('libs/portable')
     system2('pip3 install -r requirements.txt')
     system2(
-        f'python3 ./generate.py -f ../../{flutter_build_dir_2} -o . -e ../../{flutter_build_dir_2}/rustdesk.exe')
+        f'python3 ./generate.py -f ../../{flutter_output_dir} -o . -e ../../{flutter_output_dir}/rustdesk.exe')
     os.chdir('../..')
     if os.path.exists('./rustdesk_portable.exe'):
         os.replace('./target/release/rustdesk-portable-packer.exe',
