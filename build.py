@@ -38,11 +38,33 @@ def get_deb_extra_depends() -> str:
         return ", libatomic1"
     return ""
 
-def system2(cmd):
+def system2(cmd, check_result=True, show_output=True):
+    """执行系统命令，带有更好的错误处理"""
+    if show_output:
+        print(f"Executing: {cmd}")
+    
     exit_code = os.system(cmd)
-    if exit_code != 0:
-        sys.stderr.write(f"Error occurred when executing: `{cmd}`. Exiting.\n")
+    
+    if check_result and exit_code != 0:
+        error_msg = f"Command failed with exit code {exit_code}: {cmd}"
+        sys.stderr.write(f"Error: {error_msg}\n")
+        
+        # 提供可能的解决建议
+        if 'cargo build' in cmd:
+            sys.stderr.write("Possible solutions for cargo build failure:\n")
+            sys.stderr.write("1. Run 'cargo clean' to clean previous builds\n")
+            sys.stderr.write("2. Check Rust toolchain version compatibility\n")
+            sys.stderr.write("3. Ensure all dependencies are properly installed\n")
+            sys.stderr.write("4. Check for compilation errors in the code\n")
+        elif 'flutter build' in cmd:
+            sys.stderr.write("Possible solutions for flutter build failure:\n")
+            sys.stderr.write("1. Run 'flutter clean' to clean previous builds\n")
+            sys.stderr.write("2. Run 'flutter pub get' to update dependencies\n")
+            sys.stderr.write("3. Check Flutter SDK version compatibility\n")
+        
         sys.exit(-1)
+    
+    return exit_code
 
 
 def get_version():
@@ -433,44 +455,95 @@ def build_flutter_arch_manjaro(version, features):
 
 def build_flutter_windows(version, features, skip_portable_pack):
     if not skip_cargo:
-        system2(f'cargo build --features {features} --lib --release')
-        if not os.path.exists("target/release/librustdesk.dll"):
+        # 添加更详细的错误检查
+        print("Building Rust library...")
+        cargo_result = os.system(f'cargo build --features {features} --lib --release')
+        if cargo_result != 0:
             print("cargo build failed, please check rust source code.")
+            print("Possible issues:")
+            print("1. Missing dependencies")
+            print("2. Compilation errors in Rust code")
+            print("3. Environment configuration issues")
             exit(-1)
+        
+        # 检查生成的库文件
+        lib_files = [
+            "target/release/librustdesk.dll",
+            "target/release/deps/librustdesk.dll",
+            "target/release/rustdesk.dll"
+        ]
+        
+        lib_found = False
+        for lib_file in lib_files:
+            if os.path.exists(lib_file):
+                print(f"Found Rust library: {lib_file}")
+                lib_found = True
+                break
+        
+        if not lib_found:
+            print("cargo build completed but library file not found!")
+            print("Checking target/release contents:")
+            if os.path.exists("target/release"):
+                for item in os.listdir("target/release"):
+                    print(f"  {item}")
+            exit(-1)
+    
+    # 构建 Flutter 应用
+    print("Building Flutter application...")
     os.chdir('flutter')
-    system2('flutter build windows --release')
+    flutter_result = os.system('flutter build windows --release')
+    if flutter_result != 0:
+        print("Flutter build failed!")
+        os.chdir('..')
+        exit(-1)
     os.chdir('..')
     
-    # Check for different possible Flutter build output directories
+    # 更全面的路径检测
     possible_paths = [
         'flutter/build/windows/x64/runner/Release',
-        'flutter/build/windows/runner/Release',
-        'flutter/build/windows/Release'
+        'flutter/build/windows/runner/Release', 
+        'flutter/build/windows/Release',
+        'flutter/build/windows/x64/Release'
     ]
     
     flutter_output_dir = None
     for path in possible_paths:
+        full_path = os.path.abspath(path)
+        print(f"Checking path: {full_path}")
         if os.path.exists(path):
             flutter_output_dir = path
+            print(f"Found Flutter output directory: {path}")
             break
     
     if not flutter_output_dir:
         print("Error: Flutter build output directory not found!")
-        print("Checking available directories in flutter/build:")
+        print("Available directories structure:")
+        
+        # 显示详细的目录结构
         if os.path.exists('flutter/build'):
+            print("flutter/build structure:")
             for root, dirs, files in os.walk('flutter/build'):
-                if 'Release' in dirs:
-                    print(f"Found Release directory at: {os.path.join(root, 'Release')}")
+                level = root.replace('flutter/build', '').count(os.sep)
+                indent = ' ' * 2 * level
+                print(f"{indent}{os.path.basename(root)}/")
+                subindent = ' ' * 2 * (level + 1)
+                for file in files[:10]:  # 限制文件显示数量
+                    print(f"{subindent}{file}")
+                if len(files) > 10:
+                    print(f"{subindent}... and {len(files)-10} more files")
+        else:
+            print("flutter/build directory does not exist!")
         exit(-1)
     
     print(f"Using Flutter build output from: {flutter_output_dir}")
     
-    # Copy the dylib to the correct output directory
-    if not os.path.exists(flutter_output_dir):
-        print(f"Error: Flutter output directory {flutter_output_dir} does not exist")
-        exit(-1)
-        
-    shutil.copy2('target/release/deps/dylib_virtual_display.dll', flutter_output_dir)
+    # 检查并复制虚拟显示库
+    virtual_display_dll = 'target/release/deps/dylib_virtual_display.dll'
+    if os.path.exists(virtual_display_dll):
+        shutil.copy2(virtual_display_dll, flutter_output_dir)
+        print(f"Copied virtual display library to {flutter_output_dir}")
+    else:
+        print(f"Warning: Virtual display library not found at {virtual_display_dll}")
     
     if skip_portable_pack:
         return
@@ -492,8 +565,53 @@ def build_flutter_windows(version, features, skip_portable_pack):
         f'output location: {os.path.abspath(os.curdir)}/rustdesk-{version}-install.exe')
 
 
+def check_build_environment():
+    """检查构建环境是否正确配置"""
+    print("Checking build environment...")
+    
+    # 检查必要的工具
+    required_tools = []
+    if windows:
+        required_tools = ['cargo', 'python3', 'flutter']
+    else:
+        required_tools = ['cargo', 'python3', 'flutter', 'gcc', 'pkg-config']
+    
+    missing_tools = []
+    for tool in required_tools:
+        if shutil.which(tool) is None:
+            missing_tools.append(tool)
+    
+    if missing_tools:
+        print(f"Error: Missing required tools: {', '.join(missing_tools)}")
+        return False
+    
+    # 检查 Rust 工具链
+    try:
+        result = os.system('cargo --version')
+        if result != 0:
+            print("Error: Cargo is not working properly")
+            return False
+    except:
+        print("Error: Failed to check cargo version")
+        return False
+    
+    # 检查 Flutter
+    try:
+        result = os.system('flutter doctor --android-licenses')
+        # Flutter doctor 可能返回非零值但仍然可用，所以不严格检查
+    except:
+        print("Warning: Flutter doctor check failed, but continuing...")
+    
+    print("Build environment check completed")
+    return True
+
 def main():
     global skip_cargo
+    
+    # 检查构建环境
+    if not check_build_environment():
+        sys.exit(-1)
+    
     parser = make_parser()
     args = parser.parse_args()
 
@@ -506,7 +624,7 @@ def main():
     flutter = args.flutter
     if not flutter:
         system2('python3 res/inline-sciter.py')
-    print(args.skip_cargo)
+    print(f"Skip cargo: {args.skip_cargo}")
     if args.skip_cargo:
         skip_cargo = True
     portable = args.portable

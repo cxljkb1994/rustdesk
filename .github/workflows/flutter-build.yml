@@ -164,18 +164,72 @@ jobs:
 
       - name: Build rustdesk
         run: |
-          # Windows: build RustDesk
-          python3 .\build.py --portable --hwcodec --flutter --vram --skip-portable-pack
-          # Check if the Flutter build output exists and move it
-          if (Test-Path "./flutter/build/windows/x64/runner/Release") {
-            mv ./flutter/build/windows/x64/runner/Release ./rustdesk
-          } elseif (Test-Path "./flutter/build/windows/runner/Release") {
-            mv ./flutter/build/windows/runner/Release ./rustdesk
-          } else {
-            Write-Error "Flutter build output directory not found. Checking available directories..."
-            Get-ChildItem -Path "./flutter/build" -Recurse -Directory | Where-Object { $_.Name -eq "Release" } | ForEach-Object { Write-Host "Found Release directory at: $($_.FullName)" }
+          # 设置错误处理
+          $ErrorActionPreference = "Stop"
+          
+          # 检查必要的工具
+          Write-Host "Checking build environment..."
+          python3 --version
+          cargo --version
+          flutter --version
+          
+          # 清理之前的构建
+          if (Test-Path "./target") {
+            Write-Host "Cleaning previous Rust build..."
+            Remove-Item -Path "./target" -Recurse -Force -ErrorAction SilentlyContinue
+          }
+          
+          if (Test-Path "./flutter/build") {
+            Write-Host "Cleaning previous Flutter build..."
+            Remove-Item -Path "./flutter/build" -Recurse -Force -ErrorAction SilentlyContinue
+          }
+          
+          # 构建 RustDesk
+          Write-Host "Starting RustDesk build..."
+          try {
+            python3 .\build.py --portable --hwcodec --flutter --vram --skip-portable-pack
+          } catch {
+            Write-Error "Build script failed: $_"
             exit 1
           }
+          
+          # 查找 Flutter 构建输出
+          Write-Host "Searching for Flutter build output..."
+          $possiblePaths = @(
+            "./flutter/build/windows/x64/runner/Release",
+            "./flutter/build/windows/runner/Release", 
+            "./flutter/build/windows/Release",
+            "./flutter/build/windows/x64/Release"
+          )
+          
+          $flutterOutputDir = $null
+          foreach ($path in $possiblePaths) {
+            Write-Host "Checking path: $path"
+            if (Test-Path $path) {
+              $flutterOutputDir = $path
+              Write-Host "Found Flutter output directory: $path"
+              break
+            }
+          }
+          
+          if (-not $flutterOutputDir) {
+            Write-Error "Flutter build output directory not found!"
+            Write-Host "Available directory structure:"
+            
+            if (Test-Path "./flutter/build") {
+              Get-ChildItem -Path "./flutter/build" -Recurse | ForEach-Object {
+                $relativePath = $_.FullName -replace [regex]::Escape((Resolve-Path "./flutter/build").Path), ""
+                Write-Host "  $relativePath"
+              }
+            } else {
+              Write-Host "  flutter/build directory does not exist!"
+            }
+            exit 1
+          }
+          
+          # 移动构建输出
+          Write-Host "Moving Flutter output from $flutterOutputDir to ./rustdesk"
+          Move-Item -Path $flutterOutputDir -Destination "./rustdesk" -Force
 
           # Download usbmmidd_v2.zip and extract it to ./rustdesk
           Invoke-WebRequest -Uri https://github.com/rustdesk-org/rdev/releases/download/usbmmidd_v2/usbmmidd_v2.zip -OutFile usbmmidd_v2.zip
