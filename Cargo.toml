@@ -83,10 +83,18 @@ shutdown_hooks = "0.1"
 totp-rs = { version = "5.4", default-features = false, features = ["gen_secret", "otpauth"] }
 stunclient = "0.4"
 kcp-sys= { git = "https://github.com/rustdesk-org/kcp-sys"}
-[target.'cfg(not(target_os = "linux"))'.dependencies]
-# https://github.com/rustdesk/rustdesk/discussions/10197, not use cpal on linux
-cpal = { git = "https://github.com/rustdesk-org/cpal", branch = "osx-screencapturekit" }
-ringbuf = "0.3"
+# 注释掉非Linux平台的依赖，dev环境主要关注Windows
+# [target.'cfg(not(target_os = "linux"))'.dependencies]
+# # https://github.com/rustdesk/rustdesk/discussions/10197, not use cpal on linux
+# cpal = { git = "https://github.com/rustdesk-org/cpal", branch = "osx-screencapturekit" }
+# ringbuf = "0.3"
+
+# Windows构建需要的音频依赖
+[target.'cfg(target_os = "windows")'.dependencies.cpal]
+git = "https://github.com/rustdesk-org/cpal"
+branch = "osx-screencapturekit"
+[target.'cfg(target_os = "windows")'.dependencies.ringbuf]
+version = "0.3"
 
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
 mac_address = "1.1"
@@ -135,23 +143,35 @@ shared_memory = "0.12"
 tauri-winrt-notification = "0.1"
 runas = "1.2"
 
-[target.'cfg(target_os = "macos")'.dependencies]
-objc = "0.2"
-cocoa = "0.24"
-dispatch = "0.2"
-core-foundation = "0.9"
-core-graphics = "0.22"
-include_dir = "0.7"
-fruitbasket = "0.10"
-objc_id = "0.1"
+# 注释掉macOS依赖，dev环境只构建Windows包
+# [target.'cfg(target_os = "macos")'.dependencies]
+# objc = "0.2"
+# cocoa = "0.24"
+# dispatch = "0.2"
+# core-foundation = "0.9"
+# core-graphics = "0.22"
+# include_dir = "0.7"
+# fruitbasket = "0.10"
+# objc_id = "0.1"
 
-[target.'cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))'.dependencies]
-tray-icon = { git = "https://github.com/tauri-apps/tray-icon" }
-tao = { git = "https://github.com/rustdesk-org/tao", branch = "dev" }
-image = "0.24"
+# 注释掉跨平台依赖，dev环境只保留Windows必需的
+# [target.'cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))'.dependencies]
+# tray-icon = { git = "https://github.com/tauri-apps/tray-icon" }
+# tao = { git = "https://github.com/rustdesk-org/tao", branch = "dev" }
+# image = "0.24"
 
-[target.'cfg(any(target_os = "macos", target_os = "linux"))'.dependencies]
-keepawake = { git = "https://github.com/rustdesk-org/keepawake-rs" }
+# Windows专用的托盘和窗口依赖
+[target.'cfg(target_os = "windows")'.dependencies.tray-icon]
+git = "https://github.com/tauri-apps/tray-icon"
+[target.'cfg(target_os = "windows")'.dependencies.tao]
+git = "https://github.com/rustdesk-org/tao"
+branch = "dev"
+[target.'cfg(target_os = "windows")'.dependencies.image]
+version = "0.24"
+
+# 注释掉macOS和Linux的keepawake依赖
+# [target.'cfg(any(target_os = "macos", target_os = "linux"))'.dependencies]
+# keepawake = { git = "https://github.com/rustdesk-org/keepawake-rs" }
 
 [target.'cfg(any(target_os = "windows", target_os = "linux"))'.dependencies]
 wallpaper = { git = "https://github.com/rustdesk-org/wallpaper.rs" }
@@ -163,33 +183,46 @@ reqwest = { git = "https://github.com/rustdesk-org/reqwest", features = ["blocki
 [target.'cfg(not(any(target_os = "macos", target_os = "windows")))'.dependencies]
 reqwest = { git = "https://github.com/rustdesk-org/reqwest", features = ["blocking", "socks", "json", "rustls-tls", "rustls-tls-native-roots", "gzip"], default-features=false }
 
-[target.'cfg(target_os = "linux")'.dependencies]
-psimple = { package = "libpulse-simple-binding", version = "2.27" }
-pulse = { package = "libpulse-binding", version = "2.27" }
-rust-pulsectl = { git = "https://github.com/rustdesk-org/pulsectl" }
-async-process = "1.7"
-evdev = { git="https://github.com/rustdesk-org/evdev" }
-dbus = "0.9"
-dbus-crossroads = "0.5"
-pam = { git="https://github.com/rustdesk-org/pam" }
-users = { version = "0.11" }
-x11-clipboard = {git="https://github.com/clslaid/x11-clipboard", branch = "feat/store-batch", optional = true}
-x11rb =  {version = "0.12", features = ["all-extensions"], optional = true}
-percent-encoding = {version = "2.3", optional = true}
-once_cell = {version = "1.18", optional = true}
-nix = { version = "0.29", features = ["term", "process"]}
-gtk = "0.18"
-termios = "0.3"
-terminfo = "0.8"
+# 注释掉Linux依赖，dev环境只构建Windows包
+# [target.'cfg(target_os = "linux")'.dependencies]
+# psimple = { package = "libpulse-simple-binding", version = "2.27" }
+# pulse = { package = "libpulse-binding", version = "2.27" }
+# rust-pulsectl = { git = "https://github.com/rustdesk-org/pulsectl" }
+# async-process = "1.7"
+# evdev = { git="https://github.com/rustdesk-org/evdev" }
+# dbus = "0.9"
+# dbus-crossroads = "0.5"
+# pam = { git="https://github.com/rustdesk-org/pam" }
+# users = { version = "0.11" }
+# x11-clipboard = {git="https://github.com/clslaid/x11-clipboard", branch = "feat/store-batch", optional = true}
+# x11rb =  {version = "0.12", features = ["all-extensions"], optional = true}
+# percent-encoding = {version = "2.3", optional = true}
+# once_cell = {version = "1.18", optional = true}
+# nix = { version = "0.29", features = ["term", "process"]}
+# gtk = "0.18"
+# termios = "0.3"
+# terminfo = "0.8"
 
-[target.'cfg(target_os = "android")'.dependencies]
-android_logger = "0.13"
-jni = "0.21"
-android-wakelock = { git = "https://github.com/rustdesk-org/android-wakelock" }
+# 注释掉Android依赖，dev环境只构建Windows包
+# [target.'cfg(target_os = "android")'.dependencies]
+# android_logger = "0.13"
+# jni = "0.21"
+# android-wakelock = { git = "https://github.com/rustdesk-org/android-wakelock" }
 
+# dev环境工作空间，只包含Windows构建必需的库
 [workspace]
-members = ["libs/scrap", "libs/hbb_common", "libs/enigo", "libs/clipboard", "libs/virtual_display", "libs/virtual_display/dylib", "libs/portable", "libs/remote_printer"]
+members = [
+    "libs/scrap", 
+    "libs/hbb_common", 
+    "libs/enigo", 
+    "libs/clipboard", 
+    "libs/virtual_display", 
+    "libs/virtual_display/dylib", 
+    "libs/portable", 
+    "libs/remote_printer"
+]
 exclude = ["vdi/host", "examples/custom_plugin"]
+# 注释：所有库都保留，因为即使在Windows构建中也可能需要
 
 [package.metadata.winres]
 LegalCopyright = "Copyright  2025 Purslane Ltd. All rights reserved."
