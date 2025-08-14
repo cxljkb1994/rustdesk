@@ -518,12 +518,86 @@ def replace_component_guids_in_wxs():
             f.writelines(lines)
 
 
+def uninstall_self_installed_version(app_name):
+    """Uninstall the self-installed version if exists"""
+    import winreg
+    
+    # Check if self-installed version exists
+    try:
+        # Check both possible registry locations
+        for wow in [False, True]:
+            subkey = get_subkey(IS1, wow)
+            hklm = winreg.RegKey.predef(winreg.HKEY_LOCAL_MACHINE)
+            try:
+                key_path = subkey.replace("HKEY_LOCAL_MACHINE\\", "")
+                test_key = hklm.open_subkey(key_path)
+                test_key.close()
+                
+                # Self-installed version found, uninstall it
+                print(f"Found self-installed version at {subkey}, attempting to uninstall...")
+                
+                # Run uninstall command
+                uninstall_cmd = f'cmd /c "taskkill /F /IM {app_name}.exe & timeout /t 2 & reg delete "{subkey}" /f"'
+                result = subprocess.run(uninstall_cmd, shell=True, capture_output=True, text=True)
+                
+                if result.returncode == 0:
+                    print("Successfully removed self-installed version registry")
+                else:
+                    print(f"Warning: Failed to remove registry: {result.stderr}")
+                    
+                # Also try to clean up the installation directory if it exists
+                install_location = get_reg_of(subkey, "InstallLocation")
+                if install_location and Path(install_location).exists():
+                    try:
+                        # Kill processes first
+                        subprocess.run(f'taskkill /F /IM {app_name}.exe', shell=True, capture_output=True)
+                        # Wait a bit
+                        import time
+                        time.sleep(2)
+                        # Try to remove directory
+                        shutil.rmtree(install_location, ignore_errors=True)
+                        print(f"Cleaned up installation directory: {install_location}")
+                    except Exception as e:
+                        print(f"Warning: Could not clean up directory {install_location}: {e}")
+                        
+            except (OSError, FileNotFoundError):
+                # Key doesn't exist, continue
+                pass
+                
+        # Also check and clean up the app-specific registry key
+        for wow in [False, True]:
+            subkey = get_subkey(app_name, wow)
+            hklm = winreg.RegKey.predef(winreg.HKEY_LOCAL_MACHINE)
+            try:
+                key_path = subkey.replace("HKEY_LOCAL_MACHINE\\", "")
+                test_key = hklm.open_subkey(key_path)
+                # Check if it's NOT an MSI installation
+                try:
+                    windows_installer = test_key.get_value("WindowsInstaller")
+                    if windows_installer != 1:  # Not MSI installed
+                        test_key.close()
+                        print(f"Found non-MSI installation at {subkey}, removing...")
+                        subprocess.run(f'reg delete "{subkey}" /f', shell=True, capture_output=True)
+                except:
+                    # WindowsInstaller key doesn't exist, likely self-installed
+                    test_key.close()
+                    print(f"Found self-installed version at {subkey}, removing...")
+                    subprocess.run(f'reg delete "{subkey}" /f', shell=True, capture_output=True)
+            except (OSError, FileNotFoundError):
+                pass
+                
+    except Exception as e:
+        print(f"Warning during self-installed version check: {e}")
+
 if __name__ == "__main__":
     parser = make_parser()
     args = parser.parse_args()
 
     app_name = args.app_name
     dist_dir = Path(sys.argv[0]).parent.joinpath(args.dist_dir).resolve()
+
+    # Uninstall self-installed version before MSI installation
+    uninstall_self_installed_version(app_name)
 
     if not prepare_resources():
         sys.exit(-1)
