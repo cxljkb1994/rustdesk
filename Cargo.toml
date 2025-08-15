@@ -33,13 +33,14 @@ vram = ["scrap/vram"]
 mediacodec = ["scrap/mediacodec"]
 plugin_framework = []
 linux-pkg-config = ["magnum-opus/linux-pkg-config", "scrap/linux-pkg-config"]
-unix-file-copy-paste = [
-    "dep:x11-clipboard",
-    "dep:x11rb",
-    "dep:percent-encoding",
-    "dep:once_cell",
-    "clipboard/unix-file-copy-paste",
-]
+# unix-file-copy-paste feature 仅在 Unix 系统可用，Windows 构建不需要
+# unix-file-copy-paste = [
+#     "dep:x11-clipboard",
+#     "dep:x11rb",
+#     "dep:percent-encoding",
+#     "dep:once_cell",
+#     "clipboard/unix-file-copy-paste",
+# ]
 screencapturekit = ["cpal/screencapturekit"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html

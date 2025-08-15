@@ -56,11 +56,13 @@ def system2(cmd, check_result=True, show_output=True):
             sys.stderr.write("2. Check Rust toolchain version compatibility\n")
             sys.stderr.write("3. Ensure all dependencies are properly installed\n")
             sys.stderr.write("4. Check for compilation errors in the code\n")
+            sys.stderr.write("5. Check Cargo.toml for dependency conflicts\n")
         elif 'flutter build' in cmd:
             sys.stderr.write("Possible solutions for flutter build failure:\n")
             sys.stderr.write("1. Run 'flutter clean' to clean previous builds\n")
             sys.stderr.write("2. Run 'flutter pub get' to update dependencies\n")
             sys.stderr.write("3. Check Flutter SDK version compatibility\n")
+            sys.stderr.write("4. Ensure target platform is correctly specified (x64)\n")
         
         sys.exit(-1)
     
@@ -301,8 +303,11 @@ def get_features(args):
         features.append('vram')
     if args.flutter:
         features.append('flutter')
-    if args.unix_file_copy_paste:
+    # unix-file-copy-paste 仅在 Unix 系统上可用
+    if args.unix_file_copy_paste and not windows:
         features.append('unix-file-copy-paste')
+    elif args.unix_file_copy_paste and windows:
+        print("Warning: unix-file-copy-paste feature is not available on Windows, skipping...")
     if osx:
         if args.screencapturekit:
             features.append('screencapturekit')
@@ -457,6 +462,13 @@ def build_flutter_windows(version, features, skip_portable_pack):
     if not skip_cargo:
         # 添加更详细的错误检查
         print("Building Rust library...")
+        print(f"Features to build: {features}")
+        
+        # 清理之前的构建
+        if os.path.exists("target/release/deps"):
+            print("Cleaning previous build artifacts...")
+            shutil.rmtree("target/release/deps", ignore_errors=True)
+        
         cargo_result = os.system(f'cargo build --features {features} --lib --release')
         if cargo_result != 0:
             print("cargo build failed, please check rust source code.")
@@ -491,16 +503,17 @@ def build_flutter_windows(version, features, skip_portable_pack):
     # 构建 Flutter 应用
     print("Building Flutter application...")
     os.chdir('flutter')
-    flutter_result = os.system('flutter build windows --release')
+    flutter_result = os.system('flutter build windows --release --target-platform windows-x64')
     if flutter_result != 0:
         print("Flutter build failed!")
         os.chdir('..')
         exit(-1)
     os.chdir('..')
     
-    # 更全面的路径检测
+    # 更全面的路径检测 - 确保包含 x64 架构路径
     possible_paths = [
         'flutter/build/windows/x64/runner/Release',
+        'flutter/build/windows/runner/x64/Release',
         'flutter/build/windows/runner/Release', 
         'flutter/build/windows/Release',
         'flutter/build/windows/x64/Release'
